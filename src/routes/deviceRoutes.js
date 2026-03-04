@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const {
     getDevices, getDevice, createDevice, updateDevice,
-    deleteDevice, toggleStatus, powerOff, getDashboardStats
+    deleteDevice, toggleStatus, powerOff, powerOn, getDashboardStats
 } = require('../controllers/deviceController');
 const { protect } = require('../middleware/auth');
 
-// All device routes are protected
+// 🔒 Saare device routes protected hain
 router.use(protect);
 
 router.get('/stats/overview', getDashboardStats);
@@ -21,5 +21,6 @@ router.route('/:id')
 
 router.patch('/:id/status', toggleStatus);
 router.post('/:id/power-off', powerOff);
+router.post('/:id/power-on', powerOn);
 
 module.exports = router;

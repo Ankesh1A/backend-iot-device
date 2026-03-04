@@ -123,6 +123,21 @@ exports.powerOff = async (req, res) => {
     return sendSuccess(res, { data: device }, 'Remote power off command sent');
 };
 
+// @desc    Remote power on command
+// @route   POST /api/devices/:id/power-on
+// @access  Private
+exports.powerOn = async (req, res) => {
+    const device = await Device.findById(req.params.id);
+    if (!device) return sendError(res, 'Device not found', 404);
+
+    // In real world: send SMS/TCP command to device
+    // Here we just mark it as active
+    device.status = 'Active';
+    await device.save();
+
+    return sendSuccess(res, { data: device }, 'Remote power on command sent');
+};
+
 // @desc    Get dashboard stats
 // @route   GET /api/devices/stats/overview
 // @access  Private

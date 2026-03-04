@@ -3,6 +3,27 @@ const Device = require('../models/Device');
 const { sendSuccess, sendError, sendPaginated } = require('../utils/apiResponse');
 const { haversineDistance, calculateTripStats, getTodayStr } = require('../utils/distanceCalculator');
 
+const makeGoogleMapsUrl = (lat, lng) => {
+    if (lat === undefined || lng === undefined || lat === null || lng === null) return null;
+    return `https://www.google.com/maps?q=${lat},${lng}`;
+};
+
+const makeGoogleMapsDirectionsUrl = (points = []) => {
+    if (!Array.isArray(points) || points.length < 2) return null;
+    const coords = points.map(p => `${p.lat},${p.lng}`).join('/');
+    return `https://www.google.com/maps/dir/${coords}`;
+};
+
+const samplePoints = (pts, max = 25) => {
+    if (!Array.isArray(pts) || pts.length <= max) return pts;
+    const out = [];
+    const step = (pts.length - 1) / (max - 1);
+    for (let i = 0; i < max; i++) {
+        out.push(pts[Math.round(i * step)]);
+    }
+    return out;
+};
+
 // @desc    Push new location for a device (called by GPS hardware / simulator)
 // @route   POST /api/locations/:deviceId/push
 // @access  Private
@@ -62,7 +83,22 @@ exports.pushLocation = async (req, res) => {
 
     await Device.findByIdAndUpdate(device._id, updateData);
 
-    return sendSuccess(res, { data: location }, 'Location recorded', 201);
+    const locObj = location.toObject ? location.toObject() : location;
+
+    // Build a single directions URL from previous device position -> new position
+    let directionsUrl = null;
+    if (device.lat !== undefined && device.lng !== undefined && device.lat !== null && device.lng !== null) {
+        directionsUrl = makeGoogleMapsDirectionsUrl([
+            { lat: device.lat, lng: device.lng },
+            { lat: locObj.lat, lng: locObj.lng }
+        ]);
+    } else {
+        directionsUrl = makeGoogleMapsUrl(locObj.lat, locObj.lng);
+    }
+
+    const note = distanceFromPrev ? `Distance from last point: ${parseFloat(distanceFromPrev.toFixed(3))} km` : undefined;
+
+    return sendSuccess(res, { data: { ...locObj, google_maps_url: directionsUrl, note } }, 'Location recorded', 201);
 };
 
 // @desc    Get current/latest location of a device
@@ -75,18 +111,23 @@ exports.getCurrentLocation = async (req, res) => {
     const latest = await Location.findOne({ device: req.params.deviceId })
         .sort({ time: -1 });
 
+    const deviceGoogleUrl = makeGoogleMapsUrl(device.lat, device.lng);
+    const latestObj = latest ? (latest.toObject ? latest.toObject() : latest) : null;
+    if (latestObj) latestObj.google_maps_url = makeGoogleMapsUrl(latestObj.lat, latestObj.lng);
+
     return sendSuccess(res, {
         data: {
             device_id: device.device_id,
             device_name: device.device_name,
             lat: device.lat,
             lng: device.lng,
+            google_maps_url: deviceGoogleUrl,
             speed: device.speed,
             address: device.address,
             last_seen: device.last_seen,
             battery: device.battery,
             signal: device.signal,
-            latest_log: latest,
+            latest_log: latestObj,
         }
     }, 'Current location fetched');
 };
@@ -114,7 +155,22 @@ exports.getHistory = async (req, res) => {
     // Calculate trip stats using Haversine
     const stats = calculateTripStats(history);
 
-    return sendPaginated(res, history, total, page, limit, 'History fetched');
+    // Build one directions URL for the page of history (sample if too long)
+    const coords = history.map(h => ({ lat: h.lat, lng: h.lng }));
+    const sampled = samplePoints(coords, 25);
+    const route_url = makeGoogleMapsDirectionsUrl(sampled);
+
+    const historyObjs = history.map(h => {
+        const obj = h.toObject ? h.toObject() : h;
+        return {
+            ...obj,
+            device_id: obj.device,
+            device_name: obj.device_id,
+            device: undefined,
+        };
+    });
+
+    return sendPaginated(res, { points: historyObjs, route_url }, total, page, limit, 'History fetched');
 };
 
 // @desc    Get location history WITH distance stats
@@ -142,9 +198,24 @@ exports.getHistoryWithStats = async (req, res) => {
     // Distance calculated server-side via Haversine
     const stats = calculateTripStats(history);
 
+    const coords = history.map(h => ({ lat: h.lat, lng: h.lng }));
+    const sampled = samplePoints(coords, 25);
+    const route_url = makeGoogleMapsDirectionsUrl(sampled);
+
+    const historyObjs = history.map(h => {
+        const obj = h.toObject ? h.toObject() : h;
+        return {
+            ...obj,
+            device_id: obj.device,
+            device_name: obj.device_id,
+            device: undefined,
+        };
+    });
+
     return sendSuccess(res, {
-        data: history,
-        stats: { ...stats, pointCount: history.length }
+        data: historyObjs,
+        stats: { ...stats, pointCount: history.length },
+        route_url,
     }, 'History with stats fetched');
 };
 
@@ -155,7 +226,13 @@ exports.getAllLive = async (req, res) => {
     const devices = await Device.find({ status: { $ne: 'Disabled' } })
         .select('device_id device_name vehicle_id lat lng speed status battery signal last_seen address distance_today');
 
-    return sendSuccess(res, { data: devices, count: devices.length }, 'Live locations fetched');
+    const devicesWithUrls = devices.map(d => {
+        const obj = d.toObject ? d.toObject() : d;
+        obj.google_maps_url = makeGoogleMapsUrl(obj.lat, obj.lng);
+        return obj;
+    });
+
+    return sendSuccess(res, { data: devicesWithUrls, count: devicesWithUrls.length }, 'Live locations fetched');
 };
 
 // @desc    Calculate distance between two points (utility endpoint)
@@ -173,12 +250,18 @@ exports.calculateDistance = async (req, res) => {
         parseFloat(lat2), parseFloat(lng2)
     );
 
+    const from = { lat: parseFloat(lat1), lng: parseFloat(lng1) };
+    const to = { lat: parseFloat(lat2), lng: parseFloat(lng2) };
+
+    const route_url = makeGoogleMapsDirectionsUrl([from, to]) || makeGoogleMapsUrl(from.lat, from.lng);
+
     return sendSuccess(res, {
         data: {
-            from: { lat: parseFloat(lat1), lng: parseFloat(lng1) },
-            to: { lat: parseFloat(lat2), lng: parseFloat(lng2) },
+            from,
+            to,
             distance_km: distance,
             distance_m: parseFloat((distance * 1000).toFixed(1)),
+            route_url,
         }
     }, 'Distance calculated');
 };
@@ -209,6 +292,9 @@ exports.calculateRouteDistance = async (req, res) => {
         });
     }
 
+    const sampled = samplePoints(waypoints, 25);
+    const route_url = makeGoogleMapsDirectionsUrl(sampled);
+
     return sendSuccess(res, {
         data: {
             waypoints,
@@ -216,6 +302,7 @@ exports.calculateRouteDistance = async (req, res) => {
             total_distance_km: parseFloat(totalDistance.toFixed(2)),
             total_distance_m: parseFloat((totalDistance * 1000).toFixed(1)),
             waypoint_count: waypoints.length,
+            route_url,
         }
     }, 'Route distance calculated');
 };
