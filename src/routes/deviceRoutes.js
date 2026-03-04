@@ -1,26 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const {
-    getDevices, getDevice, createDevice, updateDevice,
-    deleteDevice, toggleStatus, powerOff, powerOn, getDashboardStats
-} = require('../controllers/deviceController');
+    pushLocation,
+    getCurrentLocation,
+    getHistory,
+    getHistoryWithStats,
+    getAllLive,
+    calculateDistance,
+    calculateRouteDistance,
+} = require('../controllers/locationController');
 const { protect } = require('../middleware/auth');
 
-// 🔒 Saare device routes protected hain
+// PUBLIC — GPS device bina token ke push aur get kar sakta hai
+router.post('/:deviceId/push', pushLocation);
+router.get('/:deviceId/push', getCurrentLocation);  // GET = latest location
+
+//  PROTECTED — in sab ke liye token chahiye
 router.use(protect);
-
-router.get('/stats/overview', getDashboardStats);
-router.route('/')
-    .get(getDevices)
-    .post(createDevice);
-
-router.route('/:id')
-    .get(getDevice)
-    .put(updateDevice)
-    .delete(deleteDevice);
-
-router.patch('/:id/status', toggleStatus);
-router.post('/:id/power-off', powerOff);
-router.post('/:id/power-on', powerOn);
+router.post('/distance/calculate', calculateDistance);
+router.post('/distance/route', calculateRouteDistance);
+router.get('/live', getAllLive);
+router.get('/:deviceId/current', getCurrentLocation);
+router.get('/:deviceId/history', getHistory);
+router.get('/:deviceId/history/stats', getHistoryWithStats);
 
 module.exports = router;
