@@ -84,17 +84,17 @@ npm start     # Production
 | GET | `/api/auth/me` | Get logged in user |
 
 ### Devices
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/devices` | List all devices |
-| POST | `/api/devices` | Add new device |
-| GET | `/api/devices/:id` | Get device by ID |
-| PUT | `/api/devices/:id` | Update device |
-| DELETE | `/api/devices/:id` | Delete device |
-| PATCH | `/api/devices/:id/status` | Toggle status |
-| PATCH | `/api/devices/:id/power` | Remote power on/off (body { action: 'on'|'off' }) |
-| POST | `/api/devices/:id/power-off` | Remote power off |
-| GET | `/api/devices/stats/overview` | Dashboard stats |
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/api/devices` | List all devices | ✅ Yes |
+| POST | `/api/devices` | Add new device | ✅ Yes |
+| GET | `/api/devices/:id` | Get device by ID (status check) | ❌ No (Public) |
+| PUT | `/api/devices/:id` | Update device | ✅ Yes |
+| DELETE | `/api/devices/:id` | Delete device | ✅ Yes |
+| PATCH | `/api/devices/:id/status` | Toggle status | ✅ Yes |
+| PATCH | `/api/devices/:id/power` | Remote power on/off (body { action: 'on'|'off' }) | ❌ No (Public) |
+| POST | `/api/devices/:id/power-off` | Remote power off | ❌ No (Public) |
+| GET | `/api/devices/stats/overview` | Dashboard stats | ✅ Yes |
 
 ### Locations
 | Method | Endpoint | Description |

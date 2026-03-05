@@ -19,11 +19,12 @@ router.post('/:id/power-off', powerOff);
 router.post('/:id/power-on', powerOn);
 // also expose a single toggle endpoint (new)
 router.patch('/:id/power', powerToggle);
+// Device status check bhi public kar diya (power status check ke liye)
+router.get('/:id', getDevice);
 
 // PROTECTED — iske liye token chahiye
 router.use(protect);
 router.get('/', getDevices);
-router.get('/:id', getDevice);
 router.post('/', createDevice);
 router.put('/:id', updateDevice);
 router.delete('/:id', deleteDevice);
