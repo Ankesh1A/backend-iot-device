@@ -92,6 +92,7 @@ npm start     # Production
 | PUT | `/api/devices/:id` | Update device |
 | DELETE | `/api/devices/:id` | Delete device |
 | PATCH | `/api/devices/:id/status` | Toggle status |
+| PATCH | `/api/devices/:id/power` | Remote power on/off (body { action: 'on'|'off' }) |
 | POST | `/api/devices/:id/power-off` | Remote power off |
 | GET | `/api/devices/stats/overview` | Dashboard stats |
 
@@ -147,7 +148,7 @@ POST /api/locations/distance/route
 
 1. Copy files from `frontend-integration/` to `src/services/`
 2. Replace `src/services/api.js` → JWT auto-attached
-3. Replace `src/services/deviceService.js`
+3. Replace `src/services/deviceService.js` (now includes `powerToggle` for unified on/off command)
 4. Add `src/services/locationService.js`
 5. Add `src/services/authService.js`
 6. Update DeviceDetail as shown in `DeviceDetail_changes.js`

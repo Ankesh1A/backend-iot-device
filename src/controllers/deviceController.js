@@ -138,6 +138,41 @@ exports.powerOn = async (req, res) => {
     return sendSuccess(res, { data: device }, 'Remote power on command sent');
 };
 
+// @desc    Remote power toggle (on/off)
+// @route   PATCH /api/devices/:id/power
+// @access  Private
+exports.powerToggle = async (req, res) => {
+    const { action } = req.body; // expected 'on' or 'off'
+    const device = await Device.findById(req.params.id);
+    if (!device) return sendError(res, 'Device not found', 404);
+
+    if (action === 'off') {
+        device.status = 'Disabled';
+    } else if (action === 'on') {
+        device.status = 'Active';
+    } else {
+        return sendError(res, "Action must be 'on' or 'off'", 400);
+    }
+
+    await device.save();
+    return sendSuccess(res, { data: device }, `Remote power ${action} command sent`);
+};
+
+// @desc    Remote power on command
+// @route   POST /api/devices/:id/power-on
+// @access  Private
+exports.powerOn = async (req, res) => {
+    const device = await Device.findById(req.params.id);
+    if (!device) return sendError(res, 'Device not found', 404);
+
+    // In real world: send SMS/TCP command to device
+    // Here we just mark it as active
+    device.status = 'Active';
+    await device.save();
+
+    return sendSuccess(res, { data: device }, 'Remote power on command sent');
+};
+
 // @desc    Get dashboard stats
 // @route   GET /api/devices/stats/overview
 // @access  Private
