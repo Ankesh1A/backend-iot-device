@@ -127,7 +127,7 @@ const seedDB = async () => {
     await Location.insertMany(locationDocs);
     console.log(`📍 Created ${locationDocs.length} location history records`);
 
-    console.log('\n✅ Seeding complete!');
+    console.log('\n Seeding complete!');
     console.log('─────────────────────────────');
     console.log('Login: admin@gps-track.io / admin123');
     console.log('─────────────────────────────\n');

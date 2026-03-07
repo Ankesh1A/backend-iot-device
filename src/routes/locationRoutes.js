@@ -11,7 +11,7 @@ const {
 } = require('../controllers/locationController');
 const { protect } = require('../middleware/auth');
 
-// ✅ PUBLIC — GPS device bina token ke push kar sakta hai
+//  PUBLIC — GPS device bina token ke push kar sakta hai
 router.post('/:deviceId/push', pushLocation);
 router.get('/:deviceId/history', getHistory);
 // 🔒 PROTECTED — in sab ke liye token chahiye

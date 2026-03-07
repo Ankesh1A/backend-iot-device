@@ -27,12 +27,12 @@ const app = express();
 app.use(helmet());
 
 // Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 200,
-    message: { success: false, message: 'Too many requests, please try again later.' }
-});
-app.use('/api', limiter);
+// const limiter = rateLimit({
+//     windowMs: 15 * 60 * 1000, // 15 minutes
+//     max: 200,
+//     message: { success: false, message: 'Too many requests, please try again later.' }
+// });
+// app.use('/api', limiter);
 
 // ─── Core Middleware ───────────────────────────────────
 app.use(cors({
@@ -51,7 +51,7 @@ if (process.env.NODE_ENV === 'development') {
 app.get('/api/health', (req, res) => {
     res.json({
         success: true,
-        message: 'GPS Tracker API is running 🚀',
+        message: 'GPS Tracker API is running ',
         env: process.env.NODE_ENV,
         timestamp: new Date().toISOString(),
     });
@@ -74,13 +74,13 @@ app.use(errorHandler);
 // ─── Start Server ─────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
-    console.log(`\n🚀 GPS Tracker Server running on port ${PORT} [${process.env.NODE_ENV}]`);
+    console.log(`\n GPS Tracker Server running on port ${PORT} [${process.env.NODE_ENV}]`);
     console.log(`📡 API: http://localhost:${PORT}/api`);
-    console.log(`❤️  Health: http://localhost:${PORT}/api/health\n`);
+    console.log(`  Health: http://localhost:${PORT}/api/health\n`);
 });
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
-    console.error('❌ Unhandled Rejection:', err.message);
+    console.error(' Unhandled Rejection:', err.message);
     server.close(() => process.exit(1));
 });

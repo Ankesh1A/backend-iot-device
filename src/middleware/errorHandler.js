@@ -4,7 +4,7 @@ const errorHandler = (err, req, res, next) => {
 
     // Log for dev
     if (process.env.NODE_ENV === 'development') {
-        console.error('❌ Error:', err);
+        console.error(' Error:', err);
     }
 
     // Mongoose bad ObjectId
