@@ -28,9 +28,13 @@ const samplePoints = (pts, max = 25) => {
 // @route   POST /api/locations/:deviceId/push
 // @access  Private
 exports.pushLocation = async (req, res) => {
-    const { lat, lng, speed = 0, battery, signal, address = '' } = req.body;
+    // Handle both single location and batch (array) of locations
+    const isBatch = Array.isArray(req.body.locations);
+    const locations = isBatch ? req.body.locations : [req.body];
 
-    if (!lat || !lng) return sendError(res, 'lat and lng are required', 400);
+    if (!Array.isArray(locations) || !locations.length) {
+        return sendError(res, 'lat and lng are required, or provide locations array', 400);
+    }
 
     const device = await Device.findOne({
         $or: [
@@ -42,63 +46,102 @@ exports.pushLocation = async (req, res) => {
 
     if (!device) return sendError(res, 'Device not found', 404);
 
-    // Calculate distance from last known position
-    let distanceFromPrev = 0;
-    if (device.lat && device.lng) {
-        distanceFromPrev = haversineDistance(device.lat, device.lng, lat, lng);
+    const createdLocations = [];
+    let totalDistanceAdded = 0;
+    let lastLat = device.lat;
+    let lastLng = device.lng;
+    const today = getTodayStr();
+
+    // Process each location
+    for (const locData of locations) {
+        const { lat, lng, speed = 0, battery, signal, address = '' } = locData;
+
+        if (!lat || !lng) continue;
+
+        // Calculate distance from last known position
+        let distanceFromPrev = 0;
+        if (lastLat && lastLng) {
+            distanceFromPrev = haversineDistance(lastLat, lastLng, lat, lng);
+        }
+
+        // Create location entry
+        const location = await Location.create({
+            device: device._id,
+            device_id: device.device_id,
+            lat, lng, speed,
+            address,
+            distance_from_prev: distanceFromPrev,
+            battery: battery ?? device.battery,
+            signal: signal || device.signal,
+            time: new Date(),
+        });
+
+        createdLocations.push(location);
+        totalDistanceAdded += distanceFromPrev;
+        lastLat = lat;
+        lastLng = lng;
     }
 
-    // Create location entry
-    const location = await Location.create({
-        device: device._id,
-        device_id: device.device_id,
-        lat, lng, speed,
-        address,
-        distance_from_prev: distanceFromPrev,
-        battery: battery ?? device.battery,
-        signal: signal || device.signal,
-        time: new Date(),
-    });
+    if (!createdLocations.length) {
+        return sendError(res, 'No valid locations to record', 400);
+    }
 
-    // Update device current position
-    const today = getTodayStr();
+    // Update device once with all cumulative data
     const updateData = {
-        lat, lng, speed, address,
+        lat: lastLat,
+        lng: lastLng,
+        speed: createdLocations[createdLocations.length - 1].speed,
+        address: createdLocations[createdLocations.length - 1].address,
         last_seen: new Date(),
-        $inc: { total_distance: distanceFromPrev },
+        $inc: { total_distance: totalDistanceAdded },
     };
-    if (battery !== undefined) updateData.battery = battery;
-    if (signal) updateData.signal = signal;
+
+    if (locations[0].battery !== undefined) updateData.battery = locations[0].battery;
+    if (locations[0].signal) updateData.signal = locations[0].signal;
 
     // Reset distance_today if date changed
     if (device.distance_today_date !== today) {
-        updateData.distance_today = distanceFromPrev;
+        updateData.distance_today = totalDistanceAdded;
         updateData.distance_today_date = today;
     } else {
-        updateData.$inc.distance_today = distanceFromPrev;
+        updateData.$inc.distance_today = totalDistanceAdded;
     }
 
-    // Update status based on speed
-    if (speed > 2) updateData.status = 'Active';
+    // Update status based on last speed
+    if (locations[locations.length - 1].speed > 2) updateData.status = 'Active';
 
     await Device.findByIdAndUpdate(device._id, updateData);
 
-    const locObj = location.toObject ? location.toObject() : location;
+    // Format response
+    const responseLocations = createdLocations.map((location, index) => {
+        const locObj = location.toObject ? location.toObject() : location;
+        let directionsUrl = null;
 
-    // Build a single directions URL from previous device position -> new position
-    let directionsUrl = null;
-    if (device.lat !== undefined && device.lng !== undefined && device.lat !== null && device.lng !== null) {
-        directionsUrl = makeGoogleMapsDirectionsUrl([
-            { lat: device.lat, lng: device.lng },
-            { lat: locObj.lat, lng: locObj.lng }
-        ]);
-    } else {
-        directionsUrl = makeGoogleMapsUrl(locObj.lat, locObj.lng);
-    }
+        // Build directions from previous position
+        if (index === 0 && device.lat && device.lng) {
+            directionsUrl = makeGoogleMapsDirectionsUrl([
+                { lat: device.lat, lng: device.lng },
+                { lat: locObj.lat, lng: locObj.lng }
+            ]);
+        } else if (index > 0) {
+            const prevLoc = createdLocations[index - 1];
+            directionsUrl = makeGoogleMapsDirectionsUrl([
+                { lat: prevLoc.lat, lng: prevLoc.lng },
+                { lat: locObj.lat, lng: locObj.lng }
+            ]);
+        } else {
+            directionsUrl = makeGoogleMapsUrl(locObj.lat, locObj.lng);
+        }
 
-    const note = distanceFromPrev ? `Distance from last point: ${parseFloat(distanceFromPrev.toFixed(3))} km` : undefined;
+        const note = locObj.distance_from_prev ? `Distance from last point: ${parseFloat(locObj.distance_from_prev.toFixed(3))} km` : undefined;
+        return { ...locObj, google_maps_url: directionsUrl, note };
+    });
 
-    return sendSuccess(res, { data: { ...locObj, google_maps_url: directionsUrl, note } }, 'Location recorded', 201);
+    const message = isBatch ? `${createdLocations.length} locations recorded` : 'Location recorded';
+    return sendSuccess(res, { 
+        data: isBatch ? responseLocations : responseLocations[0],
+        count: createdLocations.length 
+    }, message, 201);
 };
 
 // @desc    Get current/latest location of a device
